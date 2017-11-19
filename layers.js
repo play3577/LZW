@@ -164,14 +164,14 @@ function ChannelFullyConnected(gl, layer, deps) {
     // [ 1, 1, layer.bias ])
 
 
-    var myimage = makeTensor(gl, layer, unsqueeze(unsqueeze(unsqueeze(deps.image, 3), 2),1));
+    // var myimage = makeTensor(gl, layer, unsqueeze(unsqueeze(unsqueeze(deps.image, 3), 2),1));
     var weights = makeTensor(gl, layer, unsqueeze(unsqueeze(layer.weights.transpose(1, 0), 0), 0));
     // [ 1, 1, layer.weights.shape[1], layer.weights.shape[0] ])
 
-    console.assert(myimage.shape[0] == 1);
-    console.assert(myimage.shape[1] == 1);
-    console.assert(myimage.shape[3] == 1);
-    console.assert(myimage.shape[2] == layer.weights.shape[0]);
+    console.assert(deps.image.shape[0] == 1);
+    console.assert(deps.image.shape[1] == 1);
+    console.assert(deps.image.shape[3] == 1);
+    console.assert(deps.image.shape[2] == layer.weights.shape[0]);
 
     console.assert(weights.shape[0] == 1);
     console.assert(weights.shape[1] == 1);
@@ -181,7 +181,7 @@ function ChannelFullyConnected(gl, layer, deps) {
     var output = makeOutput(gl, layer, [1, 1, layer.weights.shape[1]]);
 
     return TensorProgram(SHADER, output, {
-        image: myimage,
+        image: deps.image,
         weights: weights,
         bias: bias,
         _activation: layer.activation
@@ -236,6 +236,24 @@ function InstanceNormalize(gl, layer, deps) {
         _activation: layer.activation
     });
 }
+
+
+function Flatten(gl, layer, deps) {
+    var SHADER = '\n        uniform Tensor image;\n      \n        vec4 process4(ivec4 pos) {\n            return image.read4(ivec4(0,0,0,pos.x * pos.y * pos.z * pos.w));\n        }\n  ';
+
+
+    var len = deps.image.shape[0]*deps.image.shape[1]*deps.image.shape[2]*deps.image.shape[3];
+    
+    var outputShape = [1,1,len,1];
+
+    var output = makeOutput(gl, layer, outputShape);
+
+    return TensorProgram(SHADER, output, {
+        image: deps.image,
+    });
+}
+
+
 
 function BatchNormalize(gl, layer, deps) {
     var SHADER = '\n        uniform Tensor image;\n        uniform Tensor beta;\n        uniform Tensor gamma;\n\n        vec4 process4(ivec4 pos) {\n            return (image.read4(ivec4(pos.xyz, 0)) + \n                beta.read4(ivec4(0, 0, pos.z, 0))) * \n                gamma.read4(ivec4(0, 0, pos.z, 0));\n        }\n    ';
@@ -417,6 +435,7 @@ function ConcatChannel(gl, layer, deps) {
 
 var LAYER_TYPES = {
     InputLayer: InputLayer,
+    Flatten: Flatten,
     ChannelFullyConnected: ChannelFullyConnected,
     Convolve2D: Convolve2D,
     BiasConvolve2D: BiasConvolve2D,
