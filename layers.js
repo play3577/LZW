@@ -239,7 +239,30 @@ function InstanceNormalize(gl, layer, deps) {
 
 
 function Flatten(gl, layer, deps) {
-    var SHADER = '\n        uniform Tensor image;\n      \n        vec4 process4(ivec4 pos) {\n            return image.read4(ivec4(0,0,0,pos.x * pos.y * pos.z * pos.w));\n        }\n  ';
+    var SHADER = `
+    uniform Tensor image;
+    ivec4 s = #(image.shape);          
+    vec4 process4(ivec4 pos) {      
+        int p  = pos.z;
+        ivec4 p0 =  ivec4( p / s.z / s.y, imod(p / s.z, s.y), imod(p, s.z), 0 );
+        vec4 e0 =  image.read4(p0); 
+        p = p + 1;
+        ivec4 p1 =  ivec4( p / s.z / s.y, imod(p / s.z, s.y), imod(p, s.z), 0 );
+        vec4 e1 =  image.read4(p1); 
+        p = p + 1;
+        ivec4 p2 =  ivec4( p / s.z / s.y, imod(p / s.z, s.y), imod(p, s.z), 0 );
+        vec4 e2 =  image.read4(p2); 
+        p = p + 1;
+        ivec4 p3 =  ivec4( p / s.z / s.y, imod(p / s.z, s.y), imod(p, s.z), 0 );
+        vec4 e3 =  image.read4(p3); 
+        if (s.z == 1) {
+            return vec4( e0.x, e1.x, e2.x, e3.x);
+        }
+        
+        if (s.z == 2) {
+            return vec4( e0.x, e0.y, e2.x, e2.y);
+        }
+    } `;
 
 
     var len = deps.image.shape[0]*deps.image.shape[1]*deps.image.shape[2]*deps.image.shape[3];
