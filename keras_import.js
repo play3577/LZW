@@ -112,21 +112,21 @@ function import_keras_network(keras_model, keras_model_meta, buffer) {
                     padding: layer.config.padding,
                     _keras: layer
                 });
-            } else if (layer.class_name == 'Dense') {
-                // not really sure about this one,
-                // console.assert(ndops.norm1(W('b:0')) < 1e-5)
-                network.push();
-
-                network.push({
-                    name: layer.name+"+flatten",
+            } else if (layer.class_name == "Flatten") {
+                network.push( {
+                    name: layer.name,
                     type: 'Flatten',
                     deps: { image: inbound[0] },
                     _keras: layer
-                },
-                {
+                });
+            } else if (layer.class_name == 'Dense') {
+                // not really sure about this one,
+                // console.assert(ndops.norm1(W('b:0')) < 1e-5)
+
+                network.push( {
                     name: layer.name,
                     type: 'ChannelFullyConnected',
-                    deps: { image: layer.name + '+flatten' },
+                    deps: { image: inbound[0] },
                     bias: W('b:0'),
                     weights: W('W:0'),
                     _keras: layer

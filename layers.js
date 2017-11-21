@@ -28,10 +28,10 @@ function makeTensor(gl, layer, data) {
     // return new Tensor(gl, data)
 
     return new Tensor(gl, data, {
-        type: 'uint8',
+        type: 'float32',
         pack: 'stride',
         density: '4:4',
-        codec: 'linquant',
+        codec: 'raw',
         min: ndops.inf(data),
         max: ndops.sup(data)
     });
@@ -348,7 +348,39 @@ function calcOutputShape(inputShape, kernelShape) {
 }
 
 function Convolve2D(gl, layer, deps) {
-    var SHADER = '\n        uniform Tensor image;\n        uniform Tensor kernel;\n        \n        uniform ivec2 imagePadding;\n        uniform ivec2 imageSubsample;\n\n        const ivec2 kernelTileSize = #(kernel.shape).xy;\n\n        vec4 process4(ivec4 pos){\n            vec4 sum = vec4(0, 0, 0, 0);\n\n            for(int f = 0; f < #(image.shape).z; f += 4){\n                for(int kx = 0; kx < kernelTileSize.x; kx++){\n                    int inputX = pos.x * imageSubsample.x + kx - imagePadding.x;\n                    if(inputX < 0 || inputX >= int(image.shape.x)) continue;\n\n                    for(int ky = 0; ky < kernelTileSize.y; ky++){\n                        int inputY = pos.y  * imageSubsample.y + ky - imagePadding.y;\n                        if(inputY < 0 || inputY >= int(image.shape.y)) continue;\n\n                        vec4 inputPix = image.read4(ivec4(inputX, inputY, f, 0));\n                        \n                        sum += inputPix.r * kernel.read4(ivec4(kx, ky, pos.z, f + 0))\n                             + inputPix.g * kernel.read4(ivec4(kx, ky, pos.z, f + 1))\n                             + inputPix.b * kernel.read4(ivec4(kx, ky, pos.z, f + 2))\n                             + inputPix.a * kernel.read4(ivec4(kx, ky, pos.z, f + 3));\n                    }\n                }\n            }\n            return sum;\n        }\n    ';
+    var SHADER = `
+    uniform Tensor image;
+    uniform Tensor kernel;
+    
+    uniform ivec2 imagePadding;
+    uniform ivec2 imageSubsample;
+
+    const ivec2 kernelTileSize = #(kernel.shape).xy;
+
+    vec4 process4(ivec4 pos){
+        vec4 sum = vec4(0, 0, 0, 0);
+
+        for(int f = 0; f < #(image.shape).z; f += 4){
+            for(int kx = 0; kx < kernelTileSize.x; kx++){
+                int inputX = pos.x * imageSubsample.x + kx - imagePadding.x;
+                if(inputX < 0 || inputX >= int(image.shape.x)) continue;
+
+                for(int ky = 0; ky < kernelTileSize.y; ky++){
+                    int inputY = pos.y  * imageSubsample.y + ky - imagePadding.y;
+                    if(inputY < 0 || inputY >= int(image.shape.y)) continue;
+
+                    vec4 inputPix = image.read4(ivec4(inputX, inputY, f, 0));
+                    
+                    sum += inputPix.r * kernel.read4(ivec4(kx, ky, pos.z, f + 0));
+                    if (f + 1 < #(image.shape).z) sum += inputPix.g * kernel.read4(ivec4(kx, ky, pos.z, f + 1));
+                    if (f + 2 < #(image.shape).z) sum += inputPix.b * kernel.read4(ivec4(kx, ky, pos.z, f + 2));
+                    if (f + 3 < #(image.shape).z) sum += inputPix.a * kernel.read4(ivec4(kx, ky, pos.z, f + 3));
+                }
+            }
+        }
+        return sum;
+    }
+`;
     console.assert(layer.kernel.shape[2] == deps.image.shape[2]);
     var kernelTensor = makeTensor(gl, layer, layer.kernel.transpose(0, 1, 3, 2));
 
